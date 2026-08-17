@@ -64,7 +64,6 @@ class MeshtasticInterface(Interface):
             from meshtastic.ble_interface import BLEInterface
             from meshtastic.serial_interface import SerialInterface
             from pubsub import pub
-            self.mt_bin_port = meshtastic.portnums_pb2.RETICULUM_TUNNEL_APP
         else:
             RNS.log("Using this interface requires a meshtastic module to be installed.", RNS.LOG_CRITICAL)
             RNS.log("You can install one with the command: python3 -m pip install meshtastic", RNS.LOG_CRITICAL)
@@ -93,6 +92,28 @@ class MeshtasticInterface(Interface):
         tcp_port = ifconf["tcp_port"] if "tcp_port" in ifconf else None
         speed = int(ifconf["data_speed"]) if "data_speed" in ifconf else 8
         hop_limit = int(ifconf["hop_limit"]) if "hop_limit" in ifconf else 1
+
+        app_portnum = int(ifconf["app_portnum"]) if "app_portnum" in ifconf else None
+        app_portname = ifconf["app_portname"] if "app_portname" in ifconf else None
+
+        if app_portnum:
+            if app_portnum in meshtastic.portnums_pb2.PortNum.DESCRIPTOR.values_by_number:
+                self.mt_bin_port = app_portnum
+            else:
+                RNS.log(f"Invalid Meshtastic Port Number {app_portnum}.", RNS.LOG_CRITICAL)
+                RNS.log("Make sure app_portnum is set to valid value in config.", RNS.LOG_CRITICAL)
+                RNS.panic()
+
+        elif app_portname:
+            if app_portname in meshtastic.portnums_pb2.PortNum.DESCRIPTOR.values_by_name:
+                self.mt_bin_port = meshtastic.portnums_pb2.PortNum.Value(app_portname)
+            else:
+                RNS.log(f"Invalid Meshtastic Port Name '{app_portname}'.", RNS.LOG_CRITICAL)
+                RNS.log("Make sure app_portname is set to valid value in config.", RNS.LOG_CRITICAL)
+                RNS.panic()
+
+        else:
+            self.mt_bin_port = meshtastic.portnums_pb2.RETICULUM_TUNNEL_APP
 
         # All interfaces must supply a hardware MTU value
         # to the RNS Transport instance. This value should
@@ -223,9 +244,10 @@ class MeshtasticInterface(Interface):
 
     def process_message(self, packet, interface):
         """Process meshtastic traffic incoming to system"""
+        from meshtastic import portnums_pb2
         # RNS.log(f'From: {packet["from"]}, payload: {packet["decoded"]["portnum"], packet["decoded"]["payload"]}')
         if "decoded" in packet:
-            if packet["decoded"]["portnum"] == "RETICULUM_TUNNEL_APP":
+            if packet["decoded"]["portnum"] == portnums_pb2.PortNum.Name(self.mt_bin_port):
                 if packet["from"] not in self.expected_index:
                     self.expected_index[packet["from"]] = []
                 expected_index = self.expected_index[packet["from"]]
